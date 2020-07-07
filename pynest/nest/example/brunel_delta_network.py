@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+1# -*- coding: utf-8 -*-
 #
 # This script is a modified implementation of an official
 # NEST example (see http://nest-simulator.org) that can be used as a task
@@ -43,7 +43,7 @@ When connecting the network customary synapse models are used, which
 allow for querying the number of created synapses. Using spike
 detectors the average firing rates of the neurons in the populations
 are established. The building as well as the simulation time of the
-network are recorded and a spike raster is plotted..
+network are recorded and a spike raster is plotted.
 '''
 
 '''
@@ -52,7 +52,6 @@ Importing all necessary modules for simulation, analysis and plotting.
 
 import os
 import matplotlib
-#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import nest
 import nest.raster_plot
@@ -62,7 +61,8 @@ from numpy import exp
 
 import neo
 from neo.io.hdf5io import NeoHdf5IO 
-from neo.io.nixio import NixIO 
+from neo.io.nixio import NixIO
+from neo.io.nixio_fr import NixIO as x
 from neo_bridge import new_experiment, add_simulation, add_data_from_device,\
     from_device
 import elephant.spike_train_correlation
@@ -100,7 +100,9 @@ def brunel_delta_nest_task(simulation_time, neuron_number, conn_prob):
     '''
 
     # Here: Create a Neo Block to hold the data
-    simulation_block = new_experiment()
+    simulation_block = new_experiment(        
+        name='BRUNEL_EXPERIMENT',
+        description="Simulation based on a Brunel Network")
     nest.ResetKernel()
 
     '''
@@ -319,8 +321,8 @@ def brunel_delta_nest_task(simulation_time, neuron_number, conn_prob):
     add_simulation(
         time=simulation_time,
         blk=simulation_block,
-        name='BRUNEL',
-        description="Simulation of a Brunel Network")
+        name='BRUNEL_INIT',
+        description="Initial transitory simulation to get into stable state")
 
     '''
     Storage of the time point after the simulation of the network in a
@@ -396,13 +398,42 @@ def brunel_delta_nest_task(simulation_time, neuron_number, conn_prob):
     add_data_from_device(espikes, simulation_block)
     add_data_from_device(ispikes, simulation_block)
     
+    print("Block:")
+    print(simulation_block.name)
+    print(simulation_block.description)
+    print(simulation_block.annotations)
+    print("Segment:")
+    print(simulation_block.segments[0].name)
+    print(simulation_block.segments[0].description)
+    print(simulation_block.segments[0].annotations)
+    print("Example spike train:")
+    print(simulation_block.segments[0].spiketrains[0].name)
+    print(simulation_block.segments[0].spiketrains[0].description)
+    print(simulation_block.segments[0].spiketrains[0].annotations)
+    
     # Save file in NIX format
     filename = "brunel_output.nix"
     if os.path.exists(filename):
         os.remove(filename)
     outfile = NixIO(filename, mode="ow")
-    outfile.write_block(simulation_block)
+    outfile.write_block(simulation_block, use_obj_names=False)
     
+    
+    print("Selecting excitatory neurons")
+    spike_trains = simulation_block.filter(
+        detector_label="brunel-py-ex", objects=neo.SpikeTrain)
+    
+    print("Calculating cross-correlation")
+    cc=elephant.spike_train_correlation.corrcoef(
+        elephant.conversion.BinnedSpikeTrain(
+            spike_trains,binsize=1.*pq.ms),
+        binary=False)
+
+    # Plot CCs
+    plt.figure()
+    plt.pcolor(cc)
+    plt.show()
+
 if __name__ == '__main__':
     brunel_delta_nest_task(simulation_time=600.0,
                            neuron_number=2500,
